@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--$ID$ -->
+<!--MIT IExpenses Pending Report-->
+<!--8-Jun-2016 Tony Whelan Created -->
+<dataTemplate name="MITIEPEN" description="MIT IExpenses Pending Report" defaultPackage="" Version="1.0">
+  <properties>
+  <property name="debug_mode" value="on" />
+  <property name="xml_tag_case" value="upper" />
+  </properties>
+  <parameters>
+  </parameters>
+  <dataQuery>
+    <sqlStatement name="Q_EXPENSES">
+     <![CDATA[
+select initcap(ppf.full_name) FULL_NAME,
+  aph.flex_concatenated COST_CENTER,
+  invoice_num EXPENSE_REPORT,
+  to_char(aph.total,'999,999.99') TOTAL_AMT,
+  to_char(aph.amt_due_ccard_company,'999,999.99') AMOUNT_CARD_CO,
+  to_char(aph.amt_due_employee,'999,999.99') CASH_REIMBURSEMENT,
+  aph.description DESCRIPTION,
+  initcap(aph.override_approver_name) APPROVER,
+  initcap(wf.to_user) PENDING_ACTION_FROM,
+  to_char(aph.creation_date,'DD-Mon-YY') CREATION_DATE,
+  initcap(decode (aph.expense_status_code, 'PENDMGR', 'PENDING MGR APPROVAL', 'RESOLUTN', 'PENDING USER', 'ERROR','ERROR')) EXPENSE_STATUS,
+  hao.name ORGANIZATION
+from ap.ap_expense_report_headers_all aph,
+  apps.per_people_f ppf,
+  applsys.wf_notifications wf,
+  hr_all_organization_units hao
+where aph.employee_id             = ppf.person_id
+and aph.invoice_num               = wf.user_key
+and wf.status                     = 'OPEN'
+and aph.org_id = hao.organization_id
+and (aph.expense_status_code not in ('PAID', 'INVOICED', 'WITHDRAWN', 'REJECTED', 'MGRAPPR')
+or aph.expense_status_code       is null)
+and ppf.effective_end_date        =
+  (select max(ppf2.effective_end_date)
+  from apps.per_people_f ppf2
+  where ppf2.person_id = ppf.person_id
+  )
+order by 1,2 desc]]>
+     </sqlStatement>
+   </dataQuery>
+    <dataStructure>
+     <group name="G_EXPENSES" source="Q_EXPENSES">
+      <element name="FULL_NAME" value="FULL_NAME" />
+	    <element name="COST_CENTER" value="COST_CENTER" />
+	    <element name="EXPENSE_REPORT" value="EXPENSE_REPORT" />
+	    <element name="TOTAL_AMT" value="TOTAL_AMT" />
+	    <element name="AMOUNT_CARD_CO" value="AMOUNT_CARD_CO" />
+	    <element name="CASH_REIMBURSEMENT" value="CASH_REIMBURSEMENT" />
+      <element name="DESCRIPTION" value="DESCRIPTION" />
+	    <element name="APPROVER" value="APPROVER" />
+	    <element name="PENDING_ACTION_FROM" value="PENDING_ACTION_FROM" />
+	    <element name="CREATION_DATE" value="CREATION_DATE" />
+	    <element name="EXPENSE_STATUS" value="EXPENSE_STATUS" />
+      <element name="ORGANIZATION" value="ORGANIZATION" />
+     </group>
+   </dataStructure>
+</dataTemplate>
