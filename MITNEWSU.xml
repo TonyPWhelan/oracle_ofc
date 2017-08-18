@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--$ID$ -->
+<!--MIT new Suppliers Report-->
+<!--21-May-2016 Tony Whelan Created -->
+<dataTemplate name="MITNEWSU" description="MIT New Suppliers Report" defaultPackage="" Version="1.0">
+  <properties>
+   <property name="debug_mode" value="on" />
+   <property name="xml_tag_case" value="upper" />
+  </properties>
+  <parameters>
+  </parameters>
+  <dataQuery>
+    <sqlStatement name="Q_SUPPLIERS">
+     <![CDATA[
+select distinct aps.segment1 F1,
+  substr(aps.vendor_name,1,80) F2,
+  to_char(aps.end_date_active,'DD-Mon-YYYY') F3,
+  case
+  when ass.last_update_date = ass.creation_date
+  then 'Site Creation'
+  when ieb.last_update_date = ieb.creation_date
+  then 'Bank Creation'
+  when ieb.last_update_date > ieb.creation_date
+  then 'Bank Update'
+  when ass.last_update_date > ass.creation_date
+  then 'Site Update'
+  else
+  'Unknown Update'
+  end F4,
+  ass.vendor_site_code F5,
+  initcap(ass.city) F6,
+  hro.name F7,
+  nvl(ppf.full_name,fu.description) F8,
+  ieb.bank_account_name F9,
+  ieb.bank_account_num F10,
+  iev.bank_branch_name F11,
+  nvl(ppf2.full_name,fu2.description) F12,
+  decode(vi.host_name,'sam.mit','OFC Production','findev2.melbourneit.com','OFC Development',vi.host_name) F13
+from ap_suppliers aps
+join hz_parties hp on hp.party_id            = aps.party_id
+join v$instance vi             on 9                 =9
+join ap_supplier_sites_all ass on aps.vendor_id     = ass.vendor_id 
+join hz_party_sites hps        on ass.party_site_id = hps.party_site_id
+left outer join fnd_user fu on ass.last_updated_by = fu.user_id
+left outer join per_all_people_f ppf on ppf.person_id = fu.employee_id
+join iby_external_payees_all iep on iep.payee_party_id      = hp.party_id or (iep.party_site_id = hps.party_site_id and iep.supplier_site_id = ass.vendor_site_id)
+join iby_pmt_instr_uses_all ipi         on iep.ext_payee_id        = ipi.ext_pmt_party_id
+join iby_ext_bank_accounts ieb          on ipi.instrument_id       = ieb.ext_bank_account_id
+join iby_ext_bank_accounts_v iev on ieb.branch_id = iev.branch_party_id
+join hr_all_organization_units hro on ass.org_id = hro.organization_id 
+left outer join fnd_user fu2 on ieb.last_updated_by = fu2.user_id
+left outer join per_all_people_f ppf2 on fu2.employee_id =  ppf2.person_id
+where (nvl(ppf.effective_end_date,'31-DEC-4712')      =
+  (select max(  nvl(ppf3.effective_end_date,'31-DEC-4712'))
+  from apps.per_people_f ppf3
+  where ppf3.person_id = ppf.person_id
+  )
+  or ppf.effective_end_date is null)
+and (nvl(ppf2.effective_end_date,'31-DEC-4712')      =
+  (select max(  nvl(ppf4.effective_end_date,'31-DEC-4712'))
+  from apps.per_people_f ppf4
+  where ppf4.person_id = ppf2.person_id
+  ) or ppf2.effective_end_date is null)
+and trunc(aps.end_date_active) > trunc(sysdate-7)
+and nvl(aps.global_attribute20,'Yes')<>'No'
+union
+SELECT  aps.segment1 F1,
+        aps.vendor_name F2,
+          to_char(aps.end_date_active,'DD-Mon-YYYY') F3,
+          case
+  when apss.last_update_date = apss.creation_date
+  then 'Site Creation'
+  when ieb.last_update_date = ieb.creation_date
+  then 'Bank Creation'
+  when ieb.last_update_date > ieb.creation_date
+  then 'Bank Update'
+  when apss.last_update_date > apss.creation_date
+  then 'Site Update'
+  else
+  'Unknown Update'
+  end F4,
+          apss.vendor_site_code,
+            initcap(apss.city) F6,
+            hro.name F7,
+              nvl(ppf.full_name,fu.description) F8,
+  ieba.bank_account_name F9,
+  ieba.bank_account_num F10,
+  iebb.bank_branch_name F11,
+  nvl(ppf2.full_name,fu2.user_name) F12,
+  decode(vi.host_name,'sam.mit','OFC Production','findev2.melbourneit.com','OFC Development',vi.host_name) F13
+   FROM ap.ap_suppliers              aps
+   join per_all_people_f papf5 on aps.employee_id = papf5.person_id
+   join ap.ap_supplier_sites_all apss on aps.vendor_id = apss.vendor_id
+   join hr_all_organization_units hro on apss.org_id = hro.organization_id 
+   join apps.iby_account_owners iao on iao.account_owner_party_id = aps.party_id
+   join apps.iby_ext_bank_accounts ieba on ieba.ext_bank_account_id = iao.ext_bank_account_id
+   join apps.iby_ext_banks_v         ieb on ieba.bank_id = ieb.bank_party_id
+   join apps.iby_ext_bank_branches_v iebb on ieb.bank_party_id = iebb.bank_party_id
+   and ieba.branch_id = iebb.branch_party_id
+   left outer join fnd_user fu on apss.last_updated_by = fu.user_id
+   left outer join per_all_people_f ppf on ppf.person_id = fu.employee_id
+   left outer join fnd_user fu2 on ieb.last_updated_by = fu2.user_id
+left outer join per_all_people_f ppf2 on fu2.employee_id =  ppf2.person_id
+join v$instance vi             on 9                 =9
+   WHERE TRUNC(SYSDATE) BETWEEN papf5.effective_start_date AND
+        papf5.effective_end_date
+        and aps.end_date_active is not null
+  and (nvl(ppf.effective_end_date,'31-DEC-4712')      =
+  (select max(  nvl(ppf3.effective_end_date,'31-DEC-4712'))
+  from apps.per_people_f ppf3
+  where ppf3.person_id = ppf.person_id
+  )
+  or ppf.effective_end_date is null)
+and (nvl(ppf2.effective_end_date,'31-DEC-4712')      =
+  (select max(  nvl(ppf4.effective_end_date,'31-DEC-4712'))
+  from apps.per_people_f ppf4
+  where ppf4.person_id = ppf2.person_id
+  ) or ppf2.effective_end_date is null)
+and trunc(aps.end_date_active) > trunc(sysdate-7)
+and nvl(aps.global_attribute20,'Yes')<>'No']]>
+     </sqlStatement>
+   </dataQuery>
+    <dataStructure>
+     <group name="G_SUPPLIERS" source="Q_SUPPLIERS">
+	    <element name="F1" value="F1" />
+      <element name="F2" value="F2" />
+	    <element name="F3" value="F3" />
+      <element name="F4" value="F4" />
+	    <element name="F5" value="F5" />
+	    <element name="F6" value="F6" />
+      <element name="F7" value="F7" />
+      <element name="F8" value="F8" />
+      <element name="F9" value="F9" />
+      <element name="F10" value="F10" />
+      <element name="F11" value="F11" />
+      <element name="F12" value="F12" />
+      <element name="F13" value="F13" />
+     </group>
+   </dataStructure>
+</dataTemplate>

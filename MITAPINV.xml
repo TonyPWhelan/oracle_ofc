@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--$ID$ -->
+<!--MIT Payables Invoices Report-->
+<!--30-Jun-2016 Tony Whelan Created -->
+<dataTemplate name="MITAPINV" description="MIT Payables Invoices Report" defaultPackage="" Version="1.0">
+  <properties>
+   <property name="debug_mode" value="on" />
+   <property name="xml_tag_case" value="upper" />
+  </properties>
+  <parameters>
+   <parameter name="P_BUSINESS_UNIT"         datatype="CHARACTER"/>
+   <parameter name="P_SUPPLIER_NAME"         datatype="CHARACTER"/>
+   <parameter name="P_INVOICE_DATE_FROM"     datatype="DATE"/>
+   <parameter name="P_INVOICE_DATE_TO"       datatype="DATE"/>
+   <parameter name="P_PAYMENT_DATE_FROM"     datatype="DATE"/>
+   <parameter name="P_PAYMENT_DATE_TO"       datatype="DATE"/>
+   <parameter name="P_INVOICE_CURRENCY"      datatype="CHARACTER"/>
+  </parameters>
+  <dataQuery>
+    <sqlStatement name="Q_INVOICES">
+     <![CDATA[
+select hro.name business_unit,
+  aps.segment1 supplier_num,
+  aps.vendor_name supplier_name,
+  ass.vendor_site_code supplier_site,
+  api.invoice_num invoice_num,
+  to_char(api.invoice_date,'DD-Mon-RRRR') invoice_date,
+  to_char(api.gl_date,'DD-Mon-RRRR') gl_date,
+  api.created_by created_by,
+  to_char(api.creation_date,'DD-Mon-RRRR') creation_date,
+  api.invoice_amount amount,
+  api.invoice_currency_code invoice_currency,
+  api.description invoice_description,
+  aip.amount amount_paid,
+  apc.currency_code payment_currency,
+  apc.check_number check_number,
+  to_char(apc.check_date,'DD-Mon-RRRR') payment_date,
+  apd.distribution_line_number line_number,
+  apd.amount distribution_amount,
+  gcc.segment1||'.'||gcc.segment2||'.'||gcc.segment3||'.'||gcc.segment4||'.'||gcc.segment5||'.'||gcc.segment6||'.'||gcc.segment7 expense_acct
+from ap_invoices_all api
+join ap_invoice_lines_all apl on api.invoice_id = apl.invoice_id
+join ap_invoice_distributions_all apd on apd.invoice_id = apl.invoice_id and apd.invoice_line_number = apl.line_number
+join gl_code_combinations gcc on gcc.code_combination_id = apd.dist_code_combination_id
+join ap_suppliers aps                       on api.vendor_id  = aps.vendor_id
+join ap_supplier_sites_all ass              on aps.vendor_id  = ass.vendor_id and api.vendor_site_id = ass.vendor_site_id
+join hr_all_organization_units hro          on ass.org_id     = hro.organization_id
+left outer join ap_invoice_payments_all aip on aip.invoice_id = api.invoice_id
+left outer join ap_checks_all apc           on apc.check_id   = aip.check_id
+where nvl(:P_BUSINESS_UNIT,hro.organization_id) = hro.organization_id 
+and nvl(:P_SUPPLIER_NAME, aps.vendor_name) = aps.vendor_name
+and to_char(api.invoice_date,'YYYY/MM/DD') between nvl(:P_INVOICE_DATE_FROM, to_char(api.invoice_date,'YYYY/MM/DD')) and nvl(:P_INVOICE_DATE_TO, to_char(api.invoice_date,'YYYY/MM/YY'))
+and nvl(to_char(apc.check_date,'YYYY/MM/DD'),'9999/01/01') between nvl(:P_PAYMENT_DATE_FROM, nvl(to_char(apc.check_date,'YYYY/MM/DD'),'9999/01/01')) and nvl(:P_PAYMENT_DATE_TO, nvl(to_char(apc.check_date,'YYYY/MM/DD'),'9999/01/01'))
+and nvl(:P_INVOICE_CURRENCY, api.invoice_currency_code) =  api.invoice_currency_code
+and hro.organization_id = api.org_id
+and apd.line_type_lookup_code = 'ITEM'
+order by aps.vendor_name,apd.distribution_line_number]]>
+     </sqlStatement>
+   </dataQuery>
+    <dataStructure>
+     <group name="G_INVOICES" source="Q_INVOICES">
+      <element name="BUSINESS_UNIT" value="BUSINESS_UNIT" />
+	    <element name="SUPPLIER_NUM" value="SUPPLIER_NUM" />
+      <element name="SUPPLIER_NAME" value="SUPPLIER_NAME" />
+	    <element name="SUPPLIER_SITE" value="SUPPLIER_SITE" />
+	    <element name="INVOICE_NUM" value="INVOICE_NUM" />
+	    <element name="INVOICE_DATE" value="INVOICE_DATE" />
+	    <element name="GL_DATE" value="GL_DATE" />
+      <element name="CREATED_BY" value="CREATED_BY" />
+	    <element name="CREATION_DATE" value="CREATION_DATE" />
+	    <element name="AMOUNT" value="AMOUNT" />
+	    <element name="INVOICE_CURRENCY" value="INVOICE_CURRENCY" />
+	    <element name="INVOICE_DESCRIPTION" value="INVOICE_DESCRIPTION" />
+      <element name="AMOUNT_PAID" value="AMOUNT_PAID" />
+      <element name="PAYMENT_CURRENCY" value="PAYMENT_CURRENCY" />
+      <element name="CHECK_NUMBER" value="CHECK_NUMBER" />
+      <element name="PAYMENT_DATE" value="PAYMENT_DATE" />
+      <element name="LINE_NUMBER" value="LINE_NUMBER" />
+      <element name="DISTRIBUTION_AMOUNT" value="DISTRIBUTION_AMOUNT" />
+      <element name="EXPENSE_ACCT" value="EXPENSE_ACCT" />
+     </group>
+   </dataStructure>
+</dataTemplate>

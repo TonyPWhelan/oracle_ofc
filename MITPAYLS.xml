@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--$ID$ -->
+<!--MIT Payment List Report-->
+<!--22-Jul-2017 Tony Whelan Created -->
+<dataTemplate name="MITPAYLS" description="MIT Payment List Report" Version="1.0">
+  <properties>
+  <property name="debug_mode" value="on" />
+  <property name="xml_tag_case" value="upper" />
+  </properties>
+  <parameters>
+   <parameter name="P_CHECKRUN_NAME" datatype="CHARACTER"/>
+   <parameter name="P_CHECK_DATE" datatype="DATE"/>
+   <parameter name="P_REQUEST_STATUS" datatype="CHARACTER"/>
+  </parameters>
+  <dataQuery>
+    <sqlStatement name="Q_CHECKRUNS">
+     <![CDATA[
+select ais.checkrun_name f1
+,ais.checkrun_id f2
+,to_char(ais.check_date,'DD-Mon-YY') f3
+,initcap(substr(nvl(ipi.payment_instruction_status,ais.status),1,9)) f4
+,initcap(ais.payment_method_code) f5
+,cba.bank_account_name f6
+,to_char(sum(nvl(asi.proposed_payment_amount,aca.amount)),'999,999,999.99') f7
+,count(distinct(nvl(asi.external_bank_account_id,aca.check_id))) f8
+,nvl(asi.payment_currency_code,aca.currency_code) f9
+from ap_inv_selection_criteria_all ais
+join ce_bank_accounts cba on ais.bank_account_id = cba.bank_account_id
+left outer join ap_selected_invoices_all asi on ais.checkrun_id = asi.checkrun_id
+left outer join ap_checks_all aca on ais.checkrun_id = aca.checkrun_id
+left outer join iby_pay_instructions_all ipi on ais.checkrun_name = ipi.pay_admin_assigned_ref_code
+where to_char(ais.check_date,'YYYY/MM/DD HH24:MI:SS') = nvl(:p_check_date, to_char(ais.check_date,'YYYY/MM/DD HH24:MI:SS'))
+and ais.checkrun_name = nvl(:p_checkrun_name,ais.checkrun_name)
+and nvl(asi.ok_to_pay_flag,'Y') = 'Y'
+and (ais.status = nvl(:p_request_status,ais.status)
+or ipi.payment_instruction_status = nvl(:p_request_status,ipi.payment_instruction_status))
+group by ais.checkrun_name
+,ais.checkrun_id
+,ais.check_date
+,initcap(substr(nvl(ipi.payment_instruction_status,ais.status),1,9))
+,ais.payment_method_code
+,cba.bank_account_name
+,nvl(asi.payment_currency_code,aca.currency_code)
+order by ais.checkrun_name]]>
+     </sqlStatement>
+	<sqlStatement name="Q_PAYMENTS">
+	 <![CDATA[select to_char(aca.check_id) f11
+, aca.checkrun_id f12
+, aca.vendor_name f13
+, aps.segment1 f14
+, to_char(aca.check_number) f16
+, aca.currency_code f17
+, to_char(aca.amount,'999,999,999.99') f18
+, aca.bank_account_id f19
+, aca.check_id f20
+from ap_inv_selection_criteria_all ais
+left outer join ap_checks_all aca on ais.checkrun_id = aca.checkrun_id
+left outer join ap_selected_invoices_all asi on ais.checkrun_id = asi.checkrun_id
+left outer join ap_suppliers aps on aca.vendor_id = aps.vendor_id
+left outer join ap_supplier_sites_all ass on aca.vendor_site_id = ass.vendor_site_id
+where ais.checkrun_name = :f1
+and nvl(asi.ok_to_pay_flag,'Y') = 'Y'
+and aca.check_id is not null
+union
+select '000000' f11
+, ais.checkrun_id f12
+, asi.vendor_name f13
+, asi.vendor_num f14
+, '00000' f16
+, asi.payment_currency_code f17
+, to_char(sum(asi.payment_amount), '999,999,999.99') f18
+, asi.external_bank_account_id f19
+, 0 f20
+from ap_inv_selection_criteria_all ais
+left outer join ap_selected_invoices_all asi on ais.checkrun_id = asi.checkrun_id
+where ais.checkrun_name = :f1
+and nvl(asi.ok_to_pay_flag,'Y') = 'Y'
+having sum(asi.payment_amount) > 0
+group by '000000', ais.checkrun_id, asi.vendor_name, asi.vendor_num, '00000', asi.external_bank_account_id, asi.payment_currency_code,0 
+order by 5,3]]>
+ </sqlStatement>
+	  <sqlStatement name="Q_INVOICES">
+	  <![CDATA[
+select distinct asi.invoice_num f21
+, to_char(asi.invoice_date,'DD-Mon-YY') f22
+, to_char(asi.due_date,'DD-Mon-YY') f23
+, ata.name f24
+, ass.vendor_site_code f25
+, to_char(aia.invoice_amount,'999,999,999.99') f26
+, to_char(asi.payment_amount,'999,999,999.99') f27
+from ap_invoices_all aia
+left outer join ap_selected_invoices_all asi on asi.invoice_id = aia.invoice_id
+join ap_terms_tl ata on aia.terms_id = ata.term_id and ata.language = 'US'
+join ap_supplier_sites_all ass on aia.vendor_id = ass.vendor_id and aia.vendor_site_id = ass.vendor_site_id
+where asi.checkrun_id = :f12 
+and asi.external_bank_account_id = :f19
+union all
+select aia.invoice_num f21
+, to_char(aia.invoice_date,'DD-Mon-YY') f22
+, to_char(aia.terms_date,'DD-Mon-YY') f23
+, ata.name f24
+, ass.vendor_site_code f25
+, to_char(aia.invoice_amount,'999,999,999.99') f26
+, to_char(aia.amount_paid,'999,999,999.99') f27
+from ap_invoices_all aia
+join ap_invoice_payments_all ipa on aia.invoice_id = ipa.invoice_id 
+join ap_checks_all aca on aca.check_id = ipa.check_id
+join ap_terms_tl ata on aia.terms_id = ata.term_id and ata.language = 'US'
+join ap_supplier_sites_all ass on aia.vendor_id = ass.vendor_id and aia.vendor_site_id = ass.vendor_site_id
+where aca.checkrun_id = :f12 
+and aca.check_id = :f20]]>
+	  </sqlStatement>
+   </dataQuery>
+    <dataStructure>
+     <group name="G_CHECKRUNS" source="Q_CHECKRUNS">
+	    <element name="f1" value="f1" />
+	    <element name="f2" value="f2" />
+	    <element name="f3" value="f3" />
+	    <element name="f4" value="f4" />
+      <element name="f5" value="f5" />
+      <element name="f6" value="f6" />
+	    <element name="f7" value="f7" />
+	    <element name="f8" value="f8" />
+	    <element name="f9" value="f9" />
+	      <group name="G_PAYMENTS" source="Q_PAYMENTS">
+         <element name="f11" value="f11" />
+	       <element name="f12" value="f12" />
+	       <element name="f13" value="f13" />
+	       <element name="f14" value="f14" />
+         <element name="f16" value="f16" />
+	       <element name="f17" value="f17" />
+	       <element name="f18" value="f18" />
+	       <element name="f19" value="f19" />
+         <element name="f20" value="f20" />
+	        <group name="G_INVOICES" source="Q_INVOICES">
+	         <element name="f21" value="f21" />
+	         <element name="f22" value="f22" />
+	         <element name="f23" value="f23" />
+	         <element name="f24" value="f24" />
+           <element name="f25" value="f25" />
+           <element name="f26" value="f26" />
+	         <element name="f27" value="f27" />
+          </group>
+        </group>
+      </group>
+   </dataStructure>
+</dataTemplate>

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--$ID$ -->
+<!--MIT Bank Accounts Audit Report-->
+<!--17-Feb-2017 Tony Whelan Created -->
+<dataTemplate name="MITAUBNK" description="MIT Bank Accounts Audit Report"
+              defaultPackage="" Version="1.0">
+  <properties>
+    <property name="debug_mode" value="on"/>
+    <property name="xml_tag_case" value="upper"/>
+  </properties>
+  <parameters>
+    <parameter name="P_BANK_ACCOUNT" datatype="NUMBER"/>
+    <parameter name="P_AUDIT_DATE_FROM" datatype="DATE"/>
+    <parameter name="P_AUDIT_DATE_TO" datatype="DATE"/>
+  </parameters>
+  <dataQuery>
+    <sqlStatement name="Q_BANK_ACCOUNTS">
+      <![CDATA[
+(select
+  case iebaa.audit_transaction_type
+    when 'U'
+    then 'Updated'
+    when 'I'
+    then 'Inserted'
+    when 'D'
+    then 'Deleted'
+    when 'C'
+    then 'Original'
+    when 'L'
+    then 'Last'
+    else 'Unknown'
+  end F1,
+  nvl(ppf.full_name,fu.description) F2,
+  to_char(iebaa.audit_timestamp,'DD-Mon-YYYY HH24:MI:SS ') F3,
+  iebaa.ext_bank_account_id F4,
+  iebaa.bank_account_name F5,
+  iebaa.bank_account_num F6,
+  iebaa.iban F7
+from iby_ext_bank_accounts_a iebaa
+join fnd_user fu                     on fu.user_name  = iebaa.audit_user_name
+left outer join per_all_people_f ppf on ppf.person_id = fu.employee_id
+where (nvl(ppf.effective_end_date,'31-DEC-4712')      =
+  (select max(nvl(ppf3.effective_end_date,'31-DEC-4712'))
+  from apps.per_people_f ppf3
+  where ppf3.person_id = ppf.person_id
+  )
+or ppf.effective_end_date        is null)
+and iebaa.audit_transaction_type <> 'I'
+and iebaa.ext_bank_account_id     = nvl(:p_bank_account,iebaa.ext_bank_account_id)
+and to_char(iebaa.audit_timestamp,'YYYY/MM/DD HH24:MI:SS') between nvl(:p_audit_date_from, to_char(iebaa.audit_timestamp,'YYYY/MM/DD HH24:MI:SS')) and nvl(:p_audit_date_to ,to_char(iebaa.audit_timestamp,'YYYY/MM/DD HH24:MI:SS'))
+union
+select distinct 'Current' F1,
+  nvl(ppf.full_name,fu.description) F2,
+  to_char(ieba.last_update_date,'DD-Mon-YYYY HH24:MI:SS ') F3,
+  ieba.ext_bank_account_id F4,
+  ieba.bank_account_name F5,
+  ieba.bank_account_num F6,
+  ieba.iban F7
+from iby_ext_bank_accounts ieba
+join fnd_user fu                     on fu.user_id               = ieba.last_updated_by
+left outer join per_all_people_f ppf on ppf.person_id            = fu.employee_id
+left outer join iby_ext_bank_accounts_a iebaa   on ieba.ext_bank_account_id = iebaa.ext_bank_account_id
+where (nvl(ppf.effective_end_date,'31-DEC-4712')                 =
+  (select max(nvl(ppf3.effective_end_date,'31-DEC-4712'))
+  from apps.per_people_f ppf3
+  where ppf3.person_id = ppf.person_id
+  )
+or ppf.effective_end_date    is null)
+and (iebaa.ext_bank_account_id = nvl(:p_bank_account,iebaa.ext_bank_account_id)
+or iebaa.ext_bank_account_id is null)
+and (to_char(iebaa.audit_timestamp,'YYYY/MM/DD HH24:MI:SS') between nvl(:p_audit_date_from, to_char(iebaa.audit_timestamp,'YYYY/MM/DD HH24:MI:SS')) and nvl(:p_audit_date_to ,to_char(iebaa.audit_timestamp,'YYYY/MM/DD HH24:MI:SS')) 
+or to_char(ieba.creation_date,'YYYY/MM/DD HH24:MI:SS') between nvl(:p_audit_date_from, to_char(ieba.creation_date,'YYYY/MM/DD HH24:MI:SS')) and nvl(:p_audit_date_to ,to_char(ieba.creation_date,'YYYY/MM/DD HH24:MI:SS')) ))
+order by 4,3 desc]]>
+    </sqlStatement>
+  </dataQuery>
+  <dataStructure>
+    <group name="G_BANK_ACCOUNTS" source="Q_BANK_ACCOUNTS">
+      <element name="F1" value="F1"/>
+      <element name="F2" value="F2"/>
+      <element name="F3" value="F3"/>
+      <element name="F4" value="F4"/>
+      <element name="F5" value="F5"/>
+      <element name="F6" value="F6"/>
+      <element name="F7" value="F7"/>
+    </group>
+  </dataStructure>
+</dataTemplate>

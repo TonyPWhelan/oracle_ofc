@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--$ID$ -->
+<!--MIT General Ledger Journal Entry Lines Report-->
+<!--13-Apr-2017 Tony Whelan Created -->
+<dataTemplate name="MITGLJES" description="MIT General Ledger Journal Entry Lines Report" defaultPackage="" Version="1.0">
+  <properties>
+   <property name="debug_mode" value="on" />
+   <property name="xml_tag_case" value="upper" />
+  </properties>
+  <parameters>
+   <parameter name="P_PERIOD_NAME"         datatype="CHARACTER"/>
+   <parameter name="P_LEDGER"             datatype="NUMBER"/>
+   <parameter name="P_AUTOREVERSE_FLAG"               datatype="CHARACTER"/>
+  </parameters>
+  <dataQuery>
+    <sqlStatement name="Q_JOURNAL_LINES">
+     <![CDATA[
+select decode(gjl.status,'P','Posted','Unposted') F1,
+decode(gao.autoreverse_flag,'Y','Yes','No') F2,
+decode(gjh.accrual_rev_status,'R','Reversed','Not Reversed') F3,
+decode(gjh.je_source,'Payables','System','Assets','System','Consolidation','System','Revaluation','System','Manual') F4,
+gjl.period_name F5,
+gl.name F6,
+gcc.segment1 F7,
+gcc.segment2 F8,
+gcc.segment3 F9,
+gcc.segment4 F10,
+gcc.segment5 F11,
+ffvt.description F12,
+gjh.je_header_id F13,
+gjh.doc_sequence_value F14,
+gjh.name F15,
+gjh.je_source F16,
+gjc.user_je_category_name F17,
+gjh.currency_code F18,
+gjl.je_line_num F19,
+gjl.description F20,
+to_char(gjl.effective_date,'DD-Mon-YY') F21,
+to_char(gjh.date_created,'DD-Mon-YY') F22,
+fu.user_name F23,
+to_char(gjl.entered_dr,'999,999,999.99') F24,
+to_char(gjl.entered_cr,'999,999,999.99') F25,
+to_char(gjl.accounted_dr,'999,999,999.99') F26,
+to_char(gjl.accounted_cr,'999,999,999.99') F27
+from gl_je_lines gjl
+join gl_ledgers gl on gjl.ledger_id = gl.ledger_id
+join gl_code_combinations gcc on gjl.code_combination_id = gcc.code_combination_id
+join apps.fnd_flex_values ffv on ffv.flex_value            = gcc.segment4
+join fnd_flex_values_tl ffvt on ffv.flex_value_id = ffvt.flex_value_id
+join gl_je_headers gjh on gjl.je_header_id = gjh.je_header_id
+join gl_je_categories_tl gjc on gjh.je_category = gjc.je_category_name
+join fnd_user fu on gjh.created_by = fu.user_id
+left outer join gl_autoreverse_options gao on gjc.je_category_name = gao.je_category_name
+where gjl.period_name = :p_period_name
+and gjl.ledger_id = nvl(:p_ledger,gjl.ledger_id)
+and gao.autoreverse_flag = nvl(:p_autoreverse_flag,gao.autoreverse_flag)
+and ffv.flex_value_set_id    = 1014178
+and ffvt.language = 'US'
+and gjc.language = 'US'
+order by gjh.je_header_id, gjl.je_line_num]]>
+     </sqlStatement>
+   </dataQuery>
+    <dataStructure>
+     <group name="G_JOURNAL_LINES" source="Q_JOURNAL_LINES">
+	    <element name="F1" value="F1" />
+      <element name="F2" value="F2" />
+	    <element name="F3" value="F3" />
+      <element name="F4" value="F4" />
+	    <element name="F5" value="F5" />
+	    <element name="F6" value="F6" />
+      <element name="F7" value="F7" />
+      <element name="F8" value="F8" />
+      <element name="F9" value="F9" />
+      <element name="F10" value="F10" />
+      <element name="F11" value="F11" />
+      <element name="F12" value="F12" />
+      <element name="F13" value="F13" />
+      <element name="F14" value="F14" />
+      <element name="F15" value="F15" />
+      <element name="F16" value="F16" />
+      <element name="F17" value="F17" />
+      <element name="F18" value="F18" />
+      <element name="F19" value="F19" />
+      <element name="F20" value="F20" />
+      <element name="F21" value="F21" />
+      <element name="F22" value="F22" />
+      <element name="F23" value="F23" />
+      <element name="F24" value="F24" />
+      <element name="F25" value="F25" />
+      <element name="F26" value="F26" />
+      <element name="F27" value="F27" />
+     </group>
+   </dataStructure>
+</dataTemplate>

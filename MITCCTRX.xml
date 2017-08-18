@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--$ID$ -->
+<!--MIT Credit Card Transaction Report-->
+<!--21-Apr-2016 Tony Whelan Created -->
+<dataTemplate name="MITCCTRX" description="MIT Credit Card Transaction Report" defaultPackage="" Version="1.0">
+  <properties>
+   <property name="debug_mode" value="on" />
+   <property name="xml_tag_case" value="upper" />
+  </properties>
+  <parameters>
+   <parameter name="P_CARD_PROGRAM_ID"       datatype="NUMBER"/>
+   <parameter name="P_CCNUMBER"              datatype="CHARACTER"/>
+   <parameter name="P_TRANSACTION_DATE_FROM" datatype="DATE"/>
+   <parameter name="P_TRANSACTION_DATE_TO"   datatype="DATE"/>
+   <parameter name="P_BILLED_DATE_FROM"      datatype="DATE"/>
+   <parameter name="P_BILLED_DATE_TO"        datatype="DATE"/>
+  </parameters>
+  <dataQuery>
+    <sqlStatement name="Q_TRANSACTIONS">
+     <![CDATA[
+ select 
+acc.trx_id F1,
+to_char(icc.ccnumber,'99999999999999999') F2,
+initcap(nvl(ppf.full_name,icc.chname)) F3,
+acp.card_program_name F4,
+acc.card_program_id F5,
+acc.expensed_amount F6,
+acc.reference_number||' ' F7,
+to_char(acc.transaction_date,'DD-Mon-YYYY') F8,
+acc.transaction_amount F9,
+acc.debit_flag F10,
+to_char(acc.billed_date,'DD-Mon-YYYY') F11,
+acc.billed_amount F12,
+acc.billed_currency_code F13,
+acc.currency_conversion_rate F14,
+acc.merchant_name1 F15,
+acc.merchant_name2 F16,
+acc.merchant_address1 F17,
+acc.merchant_address2 F18,
+acc.merchant_city F19,
+acc.merchant_postal_code F20,
+acc.merchant_country F21,
+acc.total_tax F22, 
+acc.local_tax F23,
+acc.org_id F24,
+acc.folio_type F25,
+acc.car_rental_date F26,
+acc.car_return_date F27,
+acc.car_rental_location F28,
+acc.car_return_location F29,
+acc.car_renter_name F30,
+acc.car_rental_days F31,
+acc.hotel_arrival_date F32,
+acc.hotel_depart_date F33,
+acc.hotel_charge_desc F34,
+acc.hotel_stay_duration F35,
+acc.air_routing F36,
+acc.air_service_class F37,
+acc.air_carrier_code F38,
+acc.air_ticket_issuer F39,
+acc.air_issuer_city F40,
+acc.air_passenger_name F41,
+acc.air_ticket_number F42,
+acc.financial_category F43,
+acc.payment_flag F44,
+acc.record_type F45,
+acc.category F46,
+acc.expense_status F47,
+acc.request_id F48,
+acc.trx_available_date F49,
+acc.validate_request_id F50
+from ap_credit_card_trxns_all acc
+left outer join ap_cards_all aca on acc.card_id = aca.card_id  
+left outer join iby_creditcard icc on Aca.Card_Reference_Id = icc.instrid
+left outer join ap_card_programs_all acp on aca.Card_Program_Id = acp.card_program_id
+left outer join per_people_f ppf on aca.employee_id   = ppf.person_id
+where (ppf.effective_end_date        =
+  (select max(ppf2.effective_end_date)
+  from apps.per_people_f ppf2
+  where ppf2.person_id = ppf.person_id) or ppf.effective_end_date is null)
+and acp.card_program_id = nvl(:p_card_program_id,acp.card_program_id)
+and icc.ccnumber = nvl(:p_ccnumber,icc.ccnumber)
+and to_char(acc.transaction_date,'YYYY/MM/DD HH24:MI:SS') between nvl(:p_transaction_date_from,to_char(acc.transaction_date,'YYYY/MM/DD HH24:MI:SS')) and  nvl(:p_transaction_date_to,to_char(acc.transaction_date,'YYYY/MM/DD HH24:MI:SS'))
+and to_char(acc.billed_date,'YYYY/MM/DD HH24:MI:SS') between nvl(:p_billed_date_from,to_char(acc.billed_date,'YYYY/MM/DD HH24:MI:SS')) and  nvl(:p_billed_date_to,to_char(acc.billed_date,'YYYY/MM/DD HH24:MI:SS'))
+order by icc.ccnumber,acc.transaction_date]]>
+     </sqlStatement>
+   </dataQuery>
+    <dataStructure>
+     <group name="G_TRANSACTIONS" source="Q_TRANSACTIONS">
+	    <element name="F1" value="F1" />
+      <element name="F2" value="F2" />
+	    <element name="F3" value="F3" />
+      <element name="F4" value="F4" />
+	    <element name="F5" value="F5" />
+	    <element name="F6" value="F6" />
+      <element name="F7" value="F7" />
+      <element name="F8" value="F8" />
+      <element name="F9" value="F9" />
+      <element name="F10" value="F10" />
+      <element name="F11" value="F11" />
+      <element name="F12" value="F12" />
+      <element name="F13" value="F13" />
+      <element name="F14" value="F14" />
+      <element name="F15" value="F15" />
+      <element name="F16" value="F16" />
+      <element name="F17" value="F17" />
+      <element name="F18" value="F18" />
+      <element name="F19" value="F19" />
+      <element name="F20" value="F20" />
+      <element name="F21" value="F21" />
+      <element name="F22" value="F22" />
+      <element name="F23" value="F23" />
+      <element name="F24" value="F24" />
+      <element name="F25" value="F25" />
+      <element name="F26" value="F26" />
+      <element name="F27" value="F27" />
+      <element name="F28" value="F28" />
+      <element name="F29" value="F29" />
+      <element name="F30" value="F30" />
+      <element name="F31" value="F31" />
+      <element name="F32" value="F32" />
+      <element name="F33" value="F33" />
+      <element name="F34" value="F34" />
+      <element name="F35" value="F35" />
+      <element name="F36" value="F36" />
+      <element name="F37" value="F37" />
+      <element name="F38" value="F38" />
+      <element name="F39" value="F39" />
+      <element name="F40" value="F40" />
+      <element name="F41" value="F41" />
+      <element name="F42" value="F42" />
+      <element name="F43" value="F43" />
+      <element name="F44" value="F44" />
+      <element name="F45" value="F45" />
+      <element name="F46" value="F46" />
+      <element name="F47" value="F47" />
+      <element name="F48" value="F48" />
+      <element name="F49" value="F49" />
+      <element name="F50" value="F50" />
+     </group>
+   </dataStructure>
+</dataTemplate>

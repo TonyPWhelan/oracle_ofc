@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--$ID$ -->
+<!--MIT Payables Supplier Master Report-->
+<!--13-Jul-2016 Tony Whelan Created -->
+<dataTemplate name="MITSUPMA" description="MIT Payables Supplier Master Report" defaultPackage="" Version="1.0">
+  <properties>
+   <property name="debug_mode" value="on" />
+   <property name="xml_tag_case" value="upper" />
+  </properties>
+  <parameters>
+   <parameter name="P_BUSINESS_UNIT"         datatype="CHARACTER"/>
+   <parameter name="P_DATE_FROM"             datatype="DATE"/>
+   <parameter name="P_DATE_TO"               datatype="DATE"/>
+  </parameters>
+  <dataQuery>
+    <sqlStatement name="Q_SUPPLIERS">
+     <![CDATA[
+ select aps.segment1 F1,
+  aps.vendor_name F2,
+  hro.name F3,
+  ass.vendor_site_code F4,
+  ass.creation_date F5,
+  decode(ass.inactive_date,null,'Active','Inactive') F6,
+  decode(ass.invoice_currency_code,null,aps.invoice_currency_code,ass.invoice_currency_code) F7,
+  decode(ass.payment_currency_code,null,aps.payment_currency_code,ass.payment_currency_code) F8,
+  att.name F9,
+  ipp.payment_method_code F10,
+  ass.pay_group_lookup_code F11,
+  ebv.bank_name F12,
+  eba.bank_account_name F13,
+  eba.bank_account_num F14,
+  ebbv.bank_branch_name F15,
+  ebbv.branch_number F16,
+  ebv.home_country F17,
+  eba.foreign_payment_use_flag F18,
+  eba.end_date F19,
+  decode(ass.vat_registration_num,null,aps.vat_registration_num) F20,
+  decode(ass.auto_tax_calc_flag,null,Aps.Auto_Tax_Calc_Flag) F21,
+  ass.address_line1 F22,
+  ass.address_line2 F23,
+  Ass.Address_Line3 F24,
+  ass.address_line4 F25,
+  ass.city F26,
+  ass.state F27,
+  ass.country F28,
+  ass.zip F29,
+  ass.email_address F30,
+  hps.attribute1 F31,
+  hps.attribute2 F32,
+  Ppf.Full_Name F33,
+  hps.attribute4 F34,
+  Ppf2.Full_Name F35,
+  hps.attribute6 F36,
+  (select to_number(to_char(avg(invoice_amount),'999999999')) from ap_invoices_all apa where apa.vendor_id = aps.vendor_id and apa.vendor_site_id = ass.vendor_site_id and apa.org_id = ass.org_id) F37,
+  ads.distribution_set_name F38,
+  gcc.segment1||'.'||gcc.segment2||'.'||gcc.segment3||'.'||gcc.segment4 F39,
+  adl.percent_distribution F40,
+  (select gl_flexfields_pkg.get_concat_description(chart_of_accounts_id,code_combination_id) description 
+   from gl_code_combinations 
+   where code_combination_id = gcc.code_combination_id
+   and chart_of_accounts_id = gcc.chart_of_accounts_id) F41
+from ap_suppliers aps
+join ap_supplier_sites_all ass     on aps.vendor_id             = ass.vendor_id
+join hz_parties hp                 on aps.party_id              = hp.party_id
+join hz_party_sites hps            on ass.party_site_id         = hps.party_site_id
+join hr_all_organization_units hro on ass.org_id                = hro.organization_id
+join ap_terms_tl att               on ass.terms_id              = att.term_id and att.language = 'US'
+join iby_account_owners ao         on ao.account_owner_party_id = aps.party_id
+join iby_ext_bank_accounts eba     on eba.ext_bank_account_id   = ao.ext_bank_account_id
+join iby_ext_bank_branches_v ebbv  on eba.branch_id             = ebbv.branch_party_id
+join iby_ext_banks_v ebv           on ebv.bank_party_id         = ebbv.bank_party_id
+join iby_external_payees_all iep   on ass.vendor_site_id        = Iep.Supplier_Site_Id
+join iby_ext_party_pmt_mthds ipp   on iep.ext_payee_id          = ipp.ext_pmt_party_id
+left outer join per_all_people_f ppf on hps.attribute3 = ppf.person_id
+left outer join per_all_people_f ppf2 on hps.attribute5 = ppf2.person_id
+left outer join ap_distribution_sets_all ads on ass.distribution_set_id = ads.distribution_set_id
+left outer join ap_distribution_set_lines_all adl on ads.distribution_set_id = adl.distribution_set_id
+left outer join gl_code_combinations gcc on adl.dist_code_combination_id = gcc.code_combination_id
+where nvl(:p_business_unit,hro.organization_id)                 = hro.organization_id
+and hro.organization_id                                         = ass.org_id
+and ass.creation_date between :p_start_date and :p_end_date
+order by aps.vendor_name]]>
+     </sqlStatement>
+   </dataQuery>
+    <dataStructure>
+     <group name="G_SUPPLIERS" source="Q_SUPPLIERS">
+	    <element name="F1" value="F1" />
+      <element name="F2" value="F2" />
+	    <element name="F3" value="F3" />
+      <element name="F4" value="F4" />
+	    <element name="F5" value="F5" />
+	    <element name="F6" value="F6" />
+      <element name="F7" value="F7" />
+      <element name="F8" value="F8" />
+      <element name="F9" value="F9" />
+      <element name="F10" value="F10" />
+      <element name="F11" value="F11" />
+      <element name="F12" value="F12" />
+      <element name="F13" value="F13" />
+      <element name="F14" value="F14" />
+      <element name="F15" value="F15" />
+      <element name="F16" value="F16" />
+      <element name="F17" value="F17" />
+      <element name="F18" value="F18" />
+      <element name="F19" value="F19" />
+      <element name="F20" value="F20" />
+      <element name="F21" value="F21" />
+      <element name="F22" value="F22" />
+      <element name="F23" value="F23" />
+      <element name="F24" value="F24" />
+      <element name="F25" value="F25" />
+      <element name="F26" value="F26" />
+      <element name="F27" value="F27" />
+      <element name="F28" value="F28" />
+      <element name="F29" value="F29" />
+      <element name="F30" value="F30" />
+      <element name="F31" value="F31" />
+      <element name="F32" value="F32" />
+      <element name="F33" value="F33" />
+      <element name="F34" value="F34" />
+      <element name="F35" value="F35" />
+      <element name="F36" value="F36" />
+      <element name="F37" value="F37" />
+      <element name="F38" value="F38" />
+      <element name="F39" value="F39" />
+      <element name="F40" value="F40" />
+      <element name="F41" value="F41" />
+     </group>
+   </dataStructure>
+</dataTemplate>
