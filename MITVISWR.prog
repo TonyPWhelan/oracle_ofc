@@ -1,0 +1,200 @@
+#!/bin/bash
+###############################################################################
+#- $Header: $
+#-
+#-  Filename:      MITVISWR.prog
+#-
+#-  Title:         MIT Visa Card Interface Wrapper Program
+#-
+#-  Purpose:       Run the APXVVCF4 for all files in the Visa Interface Directories
+#-                 Then move the processed files to the Archive Directory to avoid
+#-                 Duplicate processing 
+#-
+#-  Called From:   N/A
+#-
+#-  Parameters In: 1. Card program  
+#-                 2. Org ID
+#-
+#-  Description:
+###############################################################################
+#- Modification History:
+#- Date         Author       Ver    Change
+#- .........    ...........  ...    .................................
+#- 03-Mar-17    T Whelan     1.1    Initial Version
+#
+###############################################################################
+
+PROGRAM_NAME="MIT Visa Card Interface Wrapper Program"
+
+echo "-------------------"
+echo "$PROGRAM_NAME"
+echo "-------------------"
+
+###############################################################################
+LogMessage()
+{
+  #echo "$1" | tee -a $CONC_REPORT
+ 
+  # Write message to standard Log
+  echo "$1"
+}
+
+###############################################################################
+Usage()
+{
+   LogMessage "usage: $SCRIPT <Oracle_ID> <user_ID> <AOL_user> <Request_ID>"
+   LogMessage "       Oracle_ID          : Oracle username/password"
+   LogMessage "       User_ID            : AOL User ID"
+   LogMessage "       AOL_user           : AOL User"
+   LogMessage "       Request_ID         : Concurrent Request ID"
+   LogMessage "       Card_Program       : Card Program ID"
+   LogMessage "       Org_ID             : Org ID"
+   LogMessage "       Responsibility_Name: Responsibility Name"
+   LogMessage "       Interface_Directory: Interface Directory"
+   exit 1
+}
+
+###############################################################################
+StartUp()
+{
+   # Setting up the Concurrent Program report
+   # Check to see if the required environment variable and the according
+   # directory are in place
+   if [ "$APPLCSF" -a -w ${APPLCSF}/${APPLOUT} ]
+   then
+    if [ "$APPCPNAM" = "REQID" ]
+    then
+      CONC_REPORT=$APPLCSF/${APPLOUT}/o${REQUEST_ID}.out
+    else
+      CONC_REPORT=$APPLCSF/${APPLOUT}/${AOL_USER}.${REQUEST_ID}
+    fi
+   else
+      if [ -z $APPLCSF ]
+      then
+         echo "WARNING: Environment variable 'APPLCSF' has not been defined."
+      fi
+
+      if [ ! -w ${APPLCSF}/${APPLOUT} ]
+      then
+         echo "WARNING: Directory '${APPLCSF}/${APPLOUT}' is not writable by this processs"
+      fi
+
+      CONC_REPORT=/tmp/${AOL_USER}.${REQUEST_ID}
+      echo "Concurrent Program Report: $CONC_REPORT"
+   fi
+
+   LogMessage "Completed Start up step"
+}
+
+###############################################################################
+WriteReport()
+{
+LogMessage "--------------------------------------------------------------"
+LogMessage "Parameters"
+LogMessage "--------------------------------------------------------------"
+LogMessage "User ID                   : $USER_ID"
+LogMessage "AOL User                  : $AOL_USER"
+LogMessage "Card Program ID           : $CARD_PROGRAM"
+LogMessage "Org ID                    : $ORG_ID"
+LogMessage "Responsibility            : $RESPONSIBILITY_NAME"
+LogMessage "Interface Directory       : $INTERFACE_DIRECTORY"
+LogMessage "--------------------------------------------------------------"
+LogMessage " "
+}
+###############################################################################
+MainProcess()
+{
+   WriteReport
+   CheckFiles
+   LoadFiles
+}
+
+###############################################################################
+CheckFiles()
+{
+FILE_COUNT=$(find $INTERFACE_DIRECTORY -maxdepth 1 -type f | wc -l)
+  if [ $FILE_COUNT = 0 ]
+  then
+    LogMessage "There are no Visa files to process. Check if the files were loaded correctly"
+    Abort
+  fi
+}
+
+###############################################################################
+LoadFiles()
+{
+LogMessage "MIT Visa Interface Wrapper Started `date`"
+cd $INTERFACE_DIRECTORY 
+for FILE_NAME in $(ls -p | grep -v /) 
+  do
+    LogMessage "Now Processing $FILE_NAME"
+    CONCSUB $ORACLE_ID SQLAP "$RESPONSIBILITY_NAME" $AOL_USER WAIT=Y CONCURRENT SQLAP APXVVCF4 ORG_ID=$ORG_ID $CARD_PROGRAM $INTERFACE_DIRECTORY/$FILE_NAME 
+
+    if [ $? != 0 ]
+    then
+      LogMessage "MIT Visa Interface Wrapper errored `date`"
+      Abort
+    fi
+    
+    mv $FILE_NAME $ARCHIVE_DIRECTORY
+     
+  done
+}
+
+###############################################################################
+Abort()
+{
+   LogMessage ">>> $PROGRAM_NAME run aborted on `date`"
+   exit 1
+}
+
+###############################################################################
+CloseDown()
+{
+   LogMessage ">>> $PROGRAM_NAME run completed on `date`"
+   LogMessage "*** Normal End of Job ***"
+   exit 0
+}
+
+###############################################################################
+#                    MAIN PROGRAM
+###############################################################################
+echo "Starting"
+
+SCRIPT=`basename $0`
+ORACLE_ID=$1
+USER_ID=$2
+AOL_USER=$3
+REQUEST_ID=$4
+CARD_PROGRAM=$5
+ORG_ID=$6
+RESPONSIBILITY_NAME=$7
+INTERFACE_DIRECTORY=$8
+ARCHIVE_DIRECTORY=$INTERFACE_DIRECTORY/archive
+
+echo $# parameters specified
+
+# Validate the number of parameters specified
+# Note: Parameters 0-4 are specified by Oracle Concurrent Manager
+if [ $# -ne 8 ]
+then
+   Usage
+fi
+
+# Starting up the application
+StartUp
+
+# Main Process
+LogMessage " "
+LogMessage "1. Main Process"
+MainProcess
+LogMessage "Main process completed"
+
+# Closing down the application
+LogMessage " "
+LogMessage "2. Close Down"
+CloseDown
+
+###############################################################################
+# END
+###############################################################################

@@ -1,0 +1,250 @@
+#!/bin/ksh
+#- ***************************************************************************
+#- $Header: $
+#-
+#-  Filename:      MITSTARC.prog
+#-
+#-  Title:         MIT CE Archive Bank Statement Files
+#-
+#-  Purpose:       Archive Bank Statement Files to an Archive Directory
+#-                 after being loaded by standard CE Bank Statement Loader 
+#-
+#-  Called From:   N/A
+#-
+#-  Parameters In: 1. Source File Directory  
+#-                 2. Archive File Directory
+#-                 3. File Name
+#-
+#-  Description:
+#-
+#- ***************************************************************************************
+#- Modification History:
+#- Date         Author       Ver    Change
+#- .........    ...........  ...    .................................
+#- 27-Sep-16    T Whelan     1.1    Initial Version
+#
+#- ****************************************************************************************
+
+PROGRAM_NAME="MIT Archive Bank Statement Files"
+
+echo "-------------------"
+echo "$PROGRAM_NAME"
+echo "-------------------"
+
+# ------------------------------------------------------------------------------
+LogMessage()
+{
+  #echo "$1" | tee -a $CONC_REPORT
+ 
+  # Write message to standard Log
+  echo "$1"
+}
+
+# ------------------------------------------------------------------------------
+Usage()
+{
+   LogMessage "usage: $SCRIPT <Oracle_ID> <user_ID> <AOL_user> <Request_ID>"
+   LogMessage "       Oracle_ID          : Oracle username/password"
+   LogMessage "       User_ID            : AOL User ID"
+   LogMessage "       AOL_user           : AOL User"
+   LogMessage "       Request_ID         : Concurrent Request ID"
+   LogMessage "       GL_ID              : Glid/Sender"
+   LogMessage "       Mars Report Type   : Mars Report Type "
+   LogMessage "       Run_Type           : Run Type T or P "
+   LogMessage "       Target_Server      : Target Server "
+   LogMessage "       Target_Directory   : Target Directory "
+   LogMessage "       SFTP_Account       : SFTP Account "
+   exit 1
+
+}
+
+
+StartUp()
+{
+   # Setting up the Concurrent Program report
+   # Check to see if the required environment variable and the according
+   # directory are in place
+   if [ "$APPLCSF" -a -w ${APPLCSF}/${APPLOUT} ]
+   then
+    if [ "$APPCPNAM" = "REQID" ]
+    then
+      CONC_REPORT=$APPLCSF/${APPLOUT}/o${REQUEST_ID}.out
+    else
+      CONC_REPORT=$APPLCSF/${APPLOUT}/${AOL_USER}.${REQUEST_ID}
+    fi
+   else
+      if [ -z $APPLCSF ]
+      then
+         echo "WARNING: Environment variable 'APPLCSF' has not been defined."
+      fi
+
+      if [ ! -w ${APPLCSF}/${APPLOUT} ]
+      then
+         echo "WARNING: Directory '${APPLCSF}/${APPLOUT}' is not writable by this processs"
+      fi
+
+      CONC_REPORT=/tmp/${AOL_USER}.${REQUEST_ID}
+      echo "Concurrent Program Report: $CONC_REPORT"
+   fi
+
+   LogMessage "Completed Start up step"
+}
+
+PreProcessing()
+{
+   # Abort if Run Type is T for Test Submission, else Continue
+   if [ "$RUN_TYPE" = "T" ]
+   then
+      LogMessage "Run Type must be P for Final to transmit files - aborting"
+      LogMessage "******* MARS extract not Transferred *******"
+      Abort
+   else
+      # Set Variables
+      MARS_DIR=`GetDirPath 'MARS_EXTRACT_DIR'`
+      MARS_FILE=MARSGL.${GL_ID}.${MARS_REPORT_TYPE}.csv
+      MARS_FILE_DATE=MARSGL.${GL_ID}.${MARS_REPORT_TYPE}.`date +"%Y%m%d%H:%M:%S"`.csv
+      LogMessage "Mars Directory ${MARS_DIR}"
+      LogMessage "Request ID: $REQUEST_ID"
+
+      if [ "$MARS_REPORT_TYPE" = "USDRM" ]
+      then
+         REPORT_TYPE=USDRQ
+      else
+         REPORT_TYPE=$MARS_REPORT_TYPE
+      fi   
+      LogMessage "Completed Pre Processing step"
+   fi
+}
+
+
+WriteReport()
+{
+
+LogMessage "-----------------------------------"
+LogMessage "Parameters"
+LogMessage "-----------------------------------"
+LogMessage "GL Id                     : $GL_ID"
+LogMessage "Report Type               : $MARS_REPORT_TYPE"
+LogMessage "Run Type                  : $RUN_TYPE"
+LogMessage "Target Server             : $TARGET_SERVER"
+LogMessage "Target Directory          : $TARGET_DIRECTORY"
+LogMessage "SFTP Account              : $SFTP_ACCOUNT"
+LogMessage "-----------------------------------"
+}
+
+
+MainProcess()
+{
+
+   WriteReport
+   
+  
+   # Send File to Target Server
+   SFTPFile
+}
+
+
+SFTPFile()
+{
+    
+   echo "Run Type parameter is set to ${RUN_TYPE}"
+   LogMessage "Source MARS Extract file is ${MARS_DIR}/${MARS_FILE}"
+   LogMessage "GE SFTP Mars Extract started `date +"%d%b%y_%H:%M:%S"`"
+      
+   # The keychain script below must be sourced to use the key in the sftp below
+   # It sets 2 environment variables that allow the sftp to find the ssh agent process
+   # which holds the passphrase for the key
+   . ~/.keychain/`hostname`-sh
+   sftp $SFTP_ACCOUNT@$TARGET_SERVER <<EOF
+   progress
+   lcd $MARS_DIR
+   cd $TARGET_DIRECTORY
+   put $MARS_FILE $MARS_FILE_DATE 
+   exit
+EOF
+    
+   if [ $? = 0 ]
+   then
+      LogMessage "GE SFTP Mars Extract Finished `date +"%d%b%y_%H:%M:%S"`"
+   else
+      LogMessage "GE SFTP Mars Extract Errored `date +"%d%b%y_%H:%M:%S"`"
+      Abort
+   fi 
+}
+
+GetDirPath()
+{
+   sqlplus -s $ORACLE_ID <<EOF
+   set heading off
+   set feedback off
+   set timing off
+   set pages 0
+   SELECT directory_path
+   FROM   dba_directories
+   WHERE directory_name = '${1}' ;
+   exit;
+EOF
+}
+
+
+Abort()
+{
+   LogMessage ">>> $PROGRAM_NAME run aborted on `date`"
+   exit 1
+}
+
+CloseDown()
+{
+   LogMessage ">>> $PROGRAM_NAME run completed on `date`"
+   LogMessage "*** Normal End of Job ***"
+   exit 0
+}
+
+   
+#******************************************************************************
+#                    MAIN PROGRAM
+#******************************************************************************
+echo "Starting"
+
+SCRIPT=`basename $0`
+ORACLE_ID=$1
+USER_ID=$2
+AOL_USER=`echo $3 | cut -c1-8`  # Limit AOL User Name to 8 characters
+REQUEST_ID=$4
+GL_ID=$5
+MARS_REPORT_TYPE=$6
+RUN_TYPE=$7
+TARGET_SERVER=$8
+TARGET_DIRECTORY=$9
+SFTP_ACCOUNT="${10}"
+
+echo $# parameters specified
+
+# Validate the number of parameters specified
+# Note: Parameters 0-4 are specified by Oracle Concurrent Manager
+if [ $# -ne 10 ]
+then
+   Usage
+fi
+
+# Starting up the application
+StartUp
+
+# Pre-Processing
+LogMessage " "
+LogMessage "1. Pre-Processing"
+PreProcessing
+
+# Main Process
+LogMessage " "
+LogMessage "2. Main Process"
+MainProcess
+LogMessage "Main process completed"
+
+# Closing down the application
+LogMessage " "
+LogMessage "3. Close Down"
+CloseDown
+# ------------------------------------------------------------------------------
+# END
+# ------------------------------------------------------------------------------

@@ -1,0 +1,170 @@
+#!/bin/bash
+#------------------------------------------------------------------------------
+#- $Header: $
+#-
+#-  Filename:      MITSTLST.prog
+#-
+#-  Title:         MIT List Interface Files
+#-
+#-  Purpose:       List Interface Files in Interface Directories 
+#-
+#-  Called From:   N/A
+#-
+#-  Parameters In: 1. OFC Directory  
+#-                 2. File Name
+#-
+#-  Description:
+#-#----------------------------------------------------------------------------
+#- Modification History:
+#- Date         Author       Ver    Change
+#- .........    ...........  ...    .................................
+#- 11-Jan-17    T Whelan     1.1    Initial Version
+#
+#------------------------------------------------------------------------------
+
+PROGRAM_NAME="MIT List Bank Statement Files"
+
+echo "-------------------"
+echo "$PROGRAM_NAME"
+echo "-------------------"
+
+# ------------------------------------------------------------------------------
+LogMessage()
+{
+  #echo "$1" | tee -a $CONC_REPORT
+ 
+  # Write message to standard Log
+  echo "$1"
+}
+
+# ------------------------------------------------------------------------------
+Usage()
+{
+   LogMessage "usage: $SCRIPT <Oracle_ID> <user_ID> <AOL_user> <Request_ID>"
+   LogMessage "       Oracle_ID          : Oracle username/password"
+   LogMessage "       User_ID            : AOL User ID"
+   LogMessage "       AOL_user           : AOL User"
+   LogMessage "       Request_ID         : Concurrent Request ID"
+   LogMessage "       OFC_Directory      : OFC Bank Statement Directory "
+   LogMessage "       File_Name          : File Name "
+   exit 1
+}
+
+StartUp()
+{
+   # Setting up the Concurrent Program report
+   # Check to see if the required environment variable and the according
+   # directory are in place
+   if [ "$APPLCSF" -a -w ${APPLCSF}/${APPLOUT} ]
+   then
+    if [ "$APPCPNAM" = "REQID" ]
+    then
+      CONC_REPORT=$APPLCSF/${APPLOUT}/o${REQUEST_ID}.out
+    else
+      CONC_REPORT=$APPLCSF/${APPLOUT}/${AOL_USER}.${REQUEST_ID}
+    fi
+   else
+      if [ -z $APPLCSF ]
+      then
+         echo "WARNING: Environment variable 'APPLCSF' has not been defined."
+      fi
+
+      if [ ! -w ${APPLCSF}/${APPLOUT} ]
+      then
+         echo "WARNING: Directory '${APPLCSF}/${APPLOUT}' is not writable by this processs"
+      fi
+
+      CONC_REPORT=/tmp/${AOL_USER}.${REQUEST_ID}
+      echo "Concurrent Program Report: $CONC_REPORT"
+   fi
+
+   LogMessage "Completed Start up step"
+}
+
+WriteReport()
+{
+
+LogMessage "-----------------------------------"
+LogMessage "Parameters"
+LogMessage "-----------------------------------"
+LogMessage "OFC Directory             : $OFC_DIRECTORY"
+LogMessage "File Name                 : $FILE_NAME"
+LogMessage "-----------------------------------"
+LogMessage " "
+}
+
+MainProcess()
+{
+   WriteReport
+
+   # List Files
+   ListFiles
+}
+
+ListFiles()
+{
+LogMessage "MIT List Bank Statement Files Finished `date`" 
+for file_info in $(ls $OFC_DIRECTORY$FILE_NAME) 
+do
+  LogMessage " $file_info "
+done
+    
+if [ $? != 0 ]
+then
+      LogMessage "MIT List Interface Files Errored `date`"
+      Abort
+fi 
+}
+
+Abort()
+{
+   LogMessage ">>> $PROGRAM_NAME run aborted on `date`"
+   exit 1
+}
+
+CloseDown()
+{
+   LogMessage ">>> $PROGRAM_NAME run completed on `date`"
+   LogMessage "*** Normal End of Job ***"
+   exit 0
+}
+
+#------------------------------------------------------------------------------
+#                    MAIN PROGRAM
+#------------------------------------------------------------------------------
+echo "Starting"
+
+SCRIPT=`basename $0`
+ORACLE_ID=$1
+USER_ID=$2
+AOL_USER=`echo $3 | cut -c1-8`  # Limit AOL User Name to 8 characters
+REQUEST_ID=$4
+OFC_DIRECTORY=$5
+FILE_NAME=$6
+
+echo $# parameters specified
+
+# Validate the number of parameters specified
+# Note: Parameters 0-4 are specified by Oracle Concurrent Manager
+if [ $# -ne 6 ]
+then
+   Usage
+fi
+
+# Starting up the application
+StartUp
+
+# Main Process
+LogMessage " "
+LogMessage "1. Main Process"
+MainProcess
+LogMessage "Main process completed"
+
+# Closing down the application
+LogMessage " "
+LogMessage "2. Close Down"
+CloseDown
+
+# ------------------------------------------------------------------------------
+# END
+# ------------------------------------------------------------------------------

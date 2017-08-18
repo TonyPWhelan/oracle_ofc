@@ -1,0 +1,320 @@
+#!/bin/bash
+#------------------------------------------------------------------------------
+#- $Header: $
+#-
+#-  Filename:      MITAPIMP.prog
+#-
+#-  Title:         MIT AP Invoice Import
+#-
+#-  Purpose:       List,Import or Archive Payables Interface Files 
+#-
+#-  Called From:   N/A
+#-
+#-  Parameters In: 1. Interface Name
+#-                 2. SQL*Loader Control File name  
+#-                 3. Interface Directory
+#-                 4. File Action
+#-
+#-  Description:
+#-#----------------------------------------------------------------------------
+#- Modification History:
+#- Date         Author       Ver    Change
+#- .........    ...........  ...    .................................
+#- 11-Aug-17    T Whelan     1.1    Initial Version
+#
+#------------------------------------------------------------------------------
+
+PROGRAM_NAME="MIT "
+
+echo "-------------------"
+echo "$PROGRAM_NAME"
+echo "-------------------"
+
+################################################################################
+LogMessage()
+{
+  #echo "$1" | tee -a $CONC_REPORT
+ 
+  # Write message to standard Log
+  echo "$1"
+}
+
+################################################################################
+Usage()
+{
+   LogMessage "usage: $SCRIPT <Oracle_ID> <user_ID> <AOL_user> <Request_ID>"
+   LogMessage "       Oracle_ID          : Oracle username/password"
+   LogMessage "       User_ID            : AOL User ID"
+   LogMessage "       AOL_user           : AOL User"
+   LogMessage "       Request_ID         : Concurrent Request ID"
+   LogMessage "       OFC_Directory      : OFC Bank Statement Directory "
+   LogMessage "       File_Action        : File Action "
+   LogMessage "       File_Type          : File Type"
+   exit 1
+}
+################################################################################
+StartUp()
+{
+   # Setting up the Concurrent Program report
+   # Check to see if the required environment variable and the according
+   # directory are in place
+   if [ "$APPLCSF" -a -w ${APPLCSF}/${APPLOUT} ]
+   then
+    if [ "$APPCPNAM" = "REQID" ]
+    then
+      CONC_REPORT=$APPLCSF/${APPLOUT}/o${REQUEST_ID}.out
+    else
+      CONC_REPORT=$APPLCSF/${APPLOUT}/${AOL_USER}.${REQUEST_ID}
+    fi
+   else
+      if [ -z $APPLCSF ]
+      then
+         echo "WARNING: Environment variable 'APPLCSF' has not been defined."
+      fi
+
+      if [ ! -w ${APPLCSF}/${APPLOUT} ]
+      then
+         echo "WARNING: Directory '${APPLCSF}/${APPLOUT}' is not writable by this processs"
+      fi
+
+      CONC_REPORT=/tmp/${AOL_USER}.${REQUEST_ID}
+      echo "Concurrent Program Report: $CONC_REPORT"
+   fi
+
+   LogMessage "Completed Start up step"
+}
+################################################################################
+WriteReport()
+{
+
+LogMessage "-----------------------------------"
+LogMessage "Parameters"
+LogMessage "-----------------------------------"
+LogMessage "OFC Directory             : $OFC_DIRECTORY"
+LogMessage "File Action               : $FILE_ACTION"
+LogMessage "File Type                 : $FILE_TYPE"
+LogMessage "-----------------------------------"
+LogMessage " "
+}
+################################################################################
+MainProcess()
+{
+   WriteReport
+
+if [ $FILE_ACTION = 'List' ]
+then
+   ListFiles
+fi
+
+if [ $FILE_ACTION = 'Archive' ]
+then
+   ArchiveFiles
+fi
+
+if [ $FILE_ACTION = 'Import' ]
+then
+   ImportFiles
+fi
+}
+################################################################################
+ListFiles()
+{
+LogMessage "MIT List Bank Statement Files `date`" 
+for file_info in $(ls $OFC_DIRECTORY/Inbound) 
+do
+  LogMessage " $file_info "
+done
+    
+if [ $? != 0 ]
+then
+      LogMessage "MIT List Bank Statement Files Errored `date`"
+      Abort
+fi 
+}
+################################################################################
+ArchiveFiles()
+{
+LogMessage "MIT Archive Bank Statement Files `date`" 
+for file_info in $(ls $OFC_DIRECTORY/Inbound) 
+do
+  LogMessage " $file_info "
+  mv $OFC_DIRECTORY/Inbound/$file_info $OFC_DIRECTORY/Archive/$file_info
+done
+    
+if [ $? != 0 ]
+then
+      LogMessage "MIT Archive Bank Statement Files Errored `date`"
+      Abort
+fi 
+}
+################################################################################
+ImportFiles()
+{
+
+if [ "$FILE_TYPE" = 'ANZ statement file' ]
+then
+  ImportStateFiles
+fi
+
+if [ "$FILE_TYPE" = 'ANZ aba file' ]
+then
+  ImportAbaFiles
+fi
+}
+################################################################################
+ImportAbaFiles()
+{
+LogMessage "MIT Import aba Bank Statement Files `date`"
+
+### Import ANZ aba files ###
+cd $OFC_DIRECTORY/Inbound
+CTLFILE=$MIT_TOP/bin/MIT_ANZ_ABAREC.ctl
+
+if test -n "$(find $OFC_DIRECTORY/Inbound -maxdepth 1 -name 'MELANZAUD*.aba' -print -quit)"
+then
+    echo "ANZ aba Files are available for procesing."
+else
+    echo "No ANZ aba Files are available for procesing."
+    Abort
+fi
+
+# Get the files ready for processing
+# Insert the file name, line number and transaction date in each line of the file
+for file_name in `ls MELANZAUD*.aba`
+  do
+    LogMessage " $file_name "
+    control_line=$(head -n 1 $file_name)
+    trx_date=`echo $control_line | awk '{split($0,a,"PAYMENTS"); print a[2]}'`
+    LogMessage " Transaction Date $trx_date "
+ 
+    ## Add the date and line number to the end of each line
+    lineCnt=0
+    while IFS= read -r line 
+    do 
+      echo "$line" "$trx_date $file_name $lineCnt"
+      (( lineCnt++ )) 
+    done < $file_name > newFile.aba
+    rm $file_name 
+    tr -d '\015' <newFile.aba >$file_name
+    rm newFile.aba
+  done
+
+sleep 1
+
+# Process the files using sql*loader
+for file_name in `ls MELANZAUD*.aba`
+  do
+    sqlldr $ORACLE_ID control=$CTLFILE data=$file_name
+      if [ $? = 2 ]
+      then
+        mv $OFC_DIRECTORY/Inbound/$file_name $OFC_DIRECTORY/Archive/$file_name
+      else
+        LogMessage "MIT Import aba Bank Statement Balance Files Errored `date`"
+        Abort
+      fi
+  done
+}
+################################################################################
+ImportStateFiles()
+{
+LogMessage "MIT Import Bank Statement Files `date`"
+
+### Import ANZ Balance files ###
+cd $OFC_DIRECTORY/Inbound
+CTLFILE=$MIT_TOP/bin/MIT_ANZ_BALANCES.ctl
+
+if test -n "$(find $OFC_DIRECTORY/Inbound -maxdepth 1 -name 'ANZ*.csv' -print -quit)"
+then
+    echo "Statement Files are available for procesing."
+else
+    echo "No Statement Files are available for procesing."
+    Abort
+fi
+
+for file_name in `ls ANZBAL*.csv`
+  do
+    LogMessage " $file_name "
+    sqlldr $ORACLE_ID control=$CTLFILE data=$file_name
+      if [ $? = 0 ]
+      then
+        mv $OFC_DIRECTORY/Inbound/$file_name $OFC_DIRECTORY/Archive/$file_name
+      else
+        LogMessage "MIT Import Bank Statement Balance Files Errored `date`"
+        Abort
+      fi
+  done
+
+### Import ANZ Transaction files ###
+CTLFILE=$MIT_TOP/bin/MIT_ANZ_TRANSACTIONS.ctl
+
+for file_name in `ls ANZTRN*.csv`
+do
+  LogMessage " $file_name "
+  mv $file_name FileToProcess.csv
+  # Insert the line number at the start of each line in the file - mandatory in OFC
+  awk 'BEGIN{i=1} /.*/{printf "%d,% s\n",i,$0; i++}' FileToProcess.csv > $file_name
+  sqlldr $ORACLE_ID control=$CTLFILE data=$file_name
+  if [ $? = 0 ]
+    then
+    mv $OFC_DIRECTORY/Inbound/$file_name $OFC_DIRECTORY/Archive/$file_name
+    rm FileToProcess.csv
+  else
+    LogMessage "MIT Import Bank Statement Transaction Files Errored `date`"
+    Abort
+fi
+done
+    
+}
+################################################################################
+Abort()
+{
+   LogMessage ">>> $PROGRAM_NAME run aborted on `date`"
+   exit 1
+}
+################################################################################
+CloseDown()
+{
+   LogMessage ">>> $PROGRAM_NAME run completed on `date`"
+   LogMessage "*** Normal End of Job ***"
+   exit 0
+}
+################################################################################
+#                    MAIN PROGRAM
+################################################################################
+echo "Starting"
+
+SCRIPT=`basename $0`
+ORACLE_ID=$1
+USER_ID=$2
+AOL_USER=`echo $3 | cut -c1-8`  # Limit AOL User Name to 8 characters
+REQUEST_ID=$4
+OFC_DIRECTORY=$5
+FILE_ACTION=$6
+FILE_TYPE=$7
+
+echo $# parameters specified
+
+# Validate the number of parameters specified
+# Note: Parameters 0-4 are specified by Oracle Concurrent Manager
+if [ $# -ne 7 ]
+then
+   Usage
+fi
+
+# Starting up the application
+StartUp
+
+# Main Process
+LogMessage " "
+LogMessage "1. Main Process"
+MainProcess
+LogMessage "Main process completed"
+
+# Closing down the application
+LogMessage " "
+LogMessage "2. Close Down"
+CloseDown
+
+################################################################################
+# END
+################################################################################
